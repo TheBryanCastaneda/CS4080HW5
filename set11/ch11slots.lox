@@ -1,0 +1,12 @@
+fun combine(a, b) {
+    var total = a + b;
+
+    {
+        var extra = 3;
+        total = total + extra;
+    }
+    return total;
+}
+
+print combine(10, 20);
+print combine(1, 2);

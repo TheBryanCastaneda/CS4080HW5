@@ -1,13 +1,27 @@
 package com.craftinginterpreters.lox;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 class Interpreter
     implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
+  private static class Local {
+    final int distance;
+    final int index;
+
+    Local(int distance, int index) {
+      this.distance = distance;
+      this.index = index;
+    }
+  }
+
   final Environment globals = new Environment();
   private Environment environment = globals;
+
+  private final Map<Expr, Local> locals = new HashMap<>();
 
   Interpreter() {
     globals.define("clock", new LoxCallable() {
@@ -40,10 +54,37 @@ class Interpreter
     }
   }
 
+  void resolve(Expr expression, int distance, int index) {
+    locals.put(expression, new Local(distance, index));
+  }
+
+  private Object lookUpVariable(Token name, Expr expression) {
+    Local local = locals.get(expression);
+
+    if (local != null) {
+      return environment.getAt(
+          local.distance,
+          local.index,
+          name);
+    }
+
+    return globals.get(name);
+  }
+
   @Override
   public Object visitAssignExpr(Expr.Assign expr) {
     Object value = evaluate(expr.value);
-    environment.assign(expr.name, value);
+    Local local = locals.get(expr);
+
+    if (local != null) {
+      environment.assignAt(
+          local.distance,
+          local.index,
+          value);
+    } else {
+      globals.assign(expr.name, value);
+    }
+
     return value;
   }
 
@@ -211,7 +252,7 @@ class Interpreter
 
   @Override
   public Object visitVariableExpr(Expr.Variable expr) {
-    return environment.get(expr.name);
+    return lookUpVariable(expr.name, expr);
   }
 
   @Override
@@ -243,7 +284,12 @@ class Interpreter
         stmt.body,
         environment);
 
-    environment.define(stmt.name.lexeme, function);
+    if (environment == globals) {
+      globals.define(stmt.name.lexeme, function);
+    } else {
+      environment.defineLocal(function);
+    }
+
     return null;
   }
 
@@ -287,11 +333,19 @@ class Interpreter
   @Override
   public Void visitVarStmt(Stmt.Var stmt) {
     if (stmt.initializer == null) {
-      environment.defineUninitialized(
-          stmt.name.lexeme);
+      if (environment == globals) {
+        globals.defineUninitialized(stmt.name.lexeme);
+      } else {
+        environment.defineLocalUninitialized();
+      }
     } else {
       Object value = evaluate(stmt.initializer);
-      environment.define(stmt.name.lexeme, value);
+
+      if (environment == globals) {
+        globals.define(stmt.name.lexeme, value);
+      } else {
+        environment.defineLocal(value);
+      }
     }
 
     return null;

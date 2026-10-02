@@ -1,0 +1,8 @@
+fun greet(name) {
+    print "hello, " + name;
+
+}
+
+greet();
+
+print "This should not run hopefully.";
